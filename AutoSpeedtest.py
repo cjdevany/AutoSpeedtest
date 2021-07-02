@@ -3,24 +3,25 @@ import sys, datetime, time, speedtest, schedule, argparse
 """
 TODO:
     -get a setup.py file ready for installation purposes
-    -Introduce handling for the verbosity flag and the duration flag
+    -Introduce handling for the verbosity flag
 """
 
 ### Global Variables ###
 VERBOSE = False
 FREQUENCY = None
 APPEND = False
-OUTPUT_FILE = ''
+OUTPUT_FILE_NAME = ''
 DURATION = -1
+NUM_TESTS_PERFORMED = 0
 
 ### Functions ###
 def init(args):
     # init() takes parser.parse_args() and will populate the flags & global variables.
-    global VERBOSE, FREQUENCY, OUTPUT_FILE, DURATION
+    global VERBOSE, FREQUENCY, OUTPUT_FILE_NAME, DURATION
     if args.verbose:
         VERBOSE = True
     FREQUENCY = args.frequency
-    OUTPUT_FILE = args.filename
+    OUTPUT_FILE_NAME = args.filename
     DURATION = args.duration
     APPEND = args.append
 
@@ -28,15 +29,17 @@ def init(args):
     if not APPEND:
         try:
             header = "Download, Upload, Ping, Timestamp"
-            f = open(OUTPUT_FILE, 'x')
+            f = open(OUTPUT_FILE_NAME, 'x')
             f.write(f"{header}\n")
             f.close()
         except FileExistsError:
-            sys.exit(f'A file with the name "{OUTPUT_FILE}" already exists.')
+            sys.exit(f'A file with the name "{OUTPUT_FILE_NAME}" already exists.')
 
 
 def get_test():
     """Runs a speedtest, then returns a dictionary of the result. Speeds are in bytes per second."""
+    global NUM_TESTS_PERFORMED
+    NUM_TESTS_PERFORMED += 1
     current_time = datetime.datetime.now()
     try:
         s = speedtest.Speedtest()
@@ -75,20 +78,10 @@ def parse_results(results):
     return f"{scale_bps(results['download'])}, {scale_bps(results['upload'])}, {str(round(results['ping'], 1))} ms, {results['timestamp']}\n"
 
 
-def write_results(results):
-    # writes results dictionary to the csv file
-    with open(OUTPUT_FILE, 'a') as file:
-        file.write(parse_results(results))
-
-
 def run_and_record_test():
-    # and here's the reason everything else was written!
-    write_results(get_test())
-
-
-def print_results(results):
-    for key in results:
-        print(f"{key} -> {results[key]}")
+    with open(OUTPUT_FILE_NAME, 'a') as file:
+        test = get_test()
+        file.write(parse_results(test))
 
 
 ### Main ###
@@ -98,25 +91,19 @@ if __name__ == "__main__":
 
     # mandatory positional arguments
     parser.add_argument("frequency", help="How often the speed test will run in minutes.", type=int, metavar="frequency")
+    parser.add_argument("duration", help="How many tests to run before quitting. 0 = loop indefinitely.", type=int, metavar="duration")
     parser.add_argument("filename", help="The filename to output results into.", metavar="output_filename")
 
     # optional arguments
     parser.add_argument("-v", "--verbose", help="Increase output verbosity.", action="store_true")
-    parser.add_argument("-d", "--duration", help="Sets the number of tests to run before quitting.", action="store", type=int, metavar="numTests")
     parser.add_argument("-a", "--append", help="Open an existing log file and append rather than creating a new file.", action="store_true")
 
     init(parser.parse_args())    
 
     schedule.every(FREQUENCY).minutes.do(run_and_record_test)
 
-    # If DURATION wasn't changed, loop permanently.
-    if DURATION is not None:
-        for i in range(DURATION):
-            schedule.run_pending()
-            time.sleep(1)
-
-        sys.exit()
-    else:
-        while True:
-                schedule.run_pending()
-                time.sleep(1)
+    while True:
+        schedule.run_pending()
+        time.sleep(1)
+        if NUM_TESTS_PERFORMED == DURATION:
+            sys.exit()
