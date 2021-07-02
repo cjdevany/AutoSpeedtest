@@ -9,6 +9,7 @@ TODO:
 ### Global Variables ###
 VERBOSE = False
 FREQUENCY = None
+APPEND = False
 OUTPUT_FILE = ''
 DURATION = -1
 
@@ -21,15 +22,17 @@ def init(args):
     FREQUENCY = args.frequency
     OUTPUT_FILE = args.filename
     DURATION = args.duration
+    APPEND = args.append
 
-    # create the output file if it doesn't already exist
-    try:
-        header = "Download, Upload, Ping, Timestamp"
-        f = open(OUTPUT_FILE, 'x')
-        f.write(f"{header}\n")
-        f.close()
-    except FileExistsError:
-        sys.exit(f'A file with the name "{OUTPUT_FILE}" already exists.')
+    # create the output file if it doesn't already exist    
+    if not APPEND:
+        try:
+            header = "Download, Upload, Ping, Timestamp"
+            f = open(OUTPUT_FILE, 'x')
+            f.write(f"{header}\n")
+            f.close()
+        except FileExistsError:
+            sys.exit(f'A file with the name "{OUTPUT_FILE}" already exists.')
 
 
 def get_test():
@@ -100,13 +103,14 @@ if __name__ == "__main__":
     # optional arguments
     parser.add_argument("-v", "--verbose", help="Increase output verbosity.", action="store_true")
     parser.add_argument("-d", "--duration", help="Sets the number of tests to run before quitting.", action="store", type=int, metavar="numTests")
+    parser.add_argument("-a", "--append", help="Open an existing log file and append rather than creating a new file.", action="store_true")
 
     init(parser.parse_args())    
 
     schedule.every(FREQUENCY).minutes.do(run_and_record_test)
 
     # If DURATION wasn't changed, loop permanently.
-    if DURATION != -1:
+    if DURATION is not None:
         for i in range(DURATION):
             schedule.run_pending()
             time.sleep(1)
